@@ -1,0 +1,415 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>SY</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #e0f7fa;
+      padding: 30px;
+      text-align: center;
+    }
+    .menu-btn {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background: white;
+      border-radius: 10px;
+      text-decoration: none;
+      color: #333;
+      font-size: 16px;
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      margin-top: 10px;
+    }
+    .calendar div {
+      border: 1px solid #aaa;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .highlight {
+      background-color: #a5d6a7 !important;
+    }
+    .sticker { background-color: gold !important; }
+    section {
+      display: none;
+      max-width: 700px;
+      margin: 30px auto;
+      text-align: left;
+    }
+    .btn-sm {
+      margin-left: 10px;
+      padding: 2px 6px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>SY</h1>
+  <div id="loginPage">
+    <p>비밀번호를 입력하세요:</p>
+    <input type="password" id="passwordInput" placeholder="비밀번호 입력" />
+    <br><br>
+    <button onclick="checkPassword()">확인</button>
+    <p id="errorMsg" style="color:red;"></p>
+  </div>
+
+  <div id="mainApp" style="display:none;">
+    <div>
+      <span class="menu-btn" onclick="showSection('todo')">To-Do Builder</span>
+      <span class="menu-btn" onclick="showSection('calendar')">Calendar</span>
+      <span class="menu-btn" onclick="showSection('mark')">Mark Done</span>
+      <span class="menu-btn" onclick="showSection('track')">Track Record</span>
+    </div>
+
+    <section id="todo">
+      <h2>To-Do Builder</h2>
+      <label>할일 이름: <input type="text" id="taskName"></label><br>
+      <label>목표량: <input type="number" id="taskGoal">
+        <select id="taskUnit">
+          <option>장</option>
+          <option>쪽</option>
+          <option>문제</option>
+          <option>권</option>
+        </select>
+      </label><br>
+      <label>시작일: <input type="date" id="startDate" required></label><br>
+      <label>종료일: <input type="date" id="endDate"></label><br>
+      <label>요일 선택:<br>
+        <button onclick="toggleDays(true)">전체 선택</button>
+        <button onclick="toggleDays(false)">전체 해제</button><br>
+        <label><input type="checkbox" value="1"> 월</label>
+        <label><input type="checkbox" value="2"> 화</label>
+        <label><input type="checkbox" value="3"> 수</label>
+        <label><input type="checkbox" value="4"> 목</label>
+        <label><input type="checkbox" value="5"> 금</label>
+        <label><input type="checkbox" value="6"> 토</label>
+        <label><input type="checkbox" value="0"> 일</label>
+      </label><br>
+      <button onclick="addTask()">할일 추가</button>
+      <ul id="taskList"></ul>
+    </section>
+
+    <section id="calendar">
+      <h2>Calendar</h2>
+      
+        <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px;">
+          <button onclick="changeMonth(-1)">◀</button>
+          <h2 id="calendarTitle" style="margin: 0; font-size: 20px;"></h2>
+          <button onclick="changeMonth(1)">▶</button>
+        </div>
+        <div id="calendarGrid" class="calendar"></div>
+    </section>
+
+    <section id="mark">
+      
+        <h2>Mark Done</h2>
+        
+        <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px;">
+          <button onclick="changeMarkDate(-1)">◀</button>
+          <h2 id="markDateTitle" style="margin: 0; font-size: 22px;"></h2>
+          <button onclick="changeMarkDate(1)">▶</button>
+        </div>
+        
+        <div id="markTaskList" style="display: flex; flex-direction: column; gap: 20px;"></div>
+        
+    </section>
+
+    <section id="track">
+      <h2>Track Record</h2>
+      <div id="records"></div>
+    </section>
+  </div>
+
+  <script>
+    const correctPassword = "0707";
+    const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+    const userKey = "SY_tasks";
+    let editIndex = -1;
+
+    function checkPassword() {
+      const input = document.getElementById("passwordInput").value;
+      if (input === correctPassword) {
+        document.getElementById("loginPage").style.display = "none";
+        document.getElementById("mainApp").style.display = "block";
+        renderTasks();
+        showSection('todo');
+      } else {
+        document.getElementById("errorMsg").innerText = "비밀번호가 틀렸습니다.";
+      }
+    }
+
+    function showSection(id) {
+      document.querySelectorAll("section").forEach(s => s.style.display = "none");
+      document.getElementById(id).style.display = "block";
+      if (id === "calendar") generateCalendar("calendarGrid");
+      if (id === "mark") { markOffset = 0; showTodayTasks(); }
+      if (id === "track") showRecords();
+    }
+
+    function toggleDays(selectAll) {
+      document.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = selectAll);
+    }
+
+    function addTask() {
+      const name = document.getElementById("taskName").value;
+      const goal = document.getElementById("taskGoal").value;
+      const unit = document.getElementById("taskUnit").value;
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      const days = Array.from(document.querySelectorAll("input[type=checkbox]:checked")).map(cb => parseInt(cb.value));
+      if (!start) return alert("시작일을 입력하세요.");
+      const task = { name, goal, unit, start, end, days };
+      let tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+
+      if (editIndex >= 0) {
+        tasks[editIndex] = task;
+        editIndex = -1;
+      } else {
+        tasks.push(task);
+      }
+      localStorage.setItem(userKey, JSON.stringify(tasks));
+      clearInputs();
+      renderTasks();
+    }
+
+    function clearInputs() {
+      document.getElementById("taskName").value = "";
+      document.getElementById("taskGoal").value = "";
+      document.getElementById("taskUnit").value = "장";
+      document.getElementById("startDate").value = "";
+      document.getElementById("endDate").value = "";
+      document.querySelectorAll("input[type=checkbox]").forEach(cb => cb.checked = false);
+    }
+
+    function renderTasks() {
+      let tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+      const ul = document.getElementById("taskList");
+      ul.innerHTML = "";
+      tasks.forEach((t, i) => {
+        const dayText = t.days.map(d => dayNames[d]).join(", ");
+        const li = document.createElement("li");
+        li.innerHTML = `• ${t.name} (${t.goal}${t.unit}) - 요일: ${dayText} - 시작: ${t.start} - 종료: ${t.end || "없음"} 
+          <button class='btn-sm' onclick='editTask(${i})'>수정</button>
+          <button class='btn-sm' onclick='deleteTask(${i})'>삭제</button>`;
+        ul.appendChild(li);
+      });
+    }
+
+    function editTask(index) {
+      let tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+      const t = tasks[index];
+      document.getElementById("taskName").value = t.name;
+      document.getElementById("taskGoal").value = t.goal;
+      document.getElementById("taskUnit").value = t.unit;
+      document.getElementById("startDate").value = t.start;
+      document.getElementById("endDate").value = t.end;
+      document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        cb.checked = t.days.includes(parseInt(cb.value));
+      });
+      editIndex = index;
+    }
+
+    function deleteTask(index) {
+      let tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+      tasks.splice(index, 1);
+      localStorage.setItem(userKey, JSON.stringify(tasks));
+      renderTasks();
+    }
+
+    let currentMonthOffset = 0;
+function changeMonth(offset) {
+  currentMonthOffset += offset;
+  generateCalendar("calendarGrid");
+  generateCalendar("markCalendar", true);
+}
+
+function generateCalendar(containerId, allowSticker = false) {
+      const calendar = document.getElementById(containerId);
+      calendar.innerHTML = "";
+      const today = new Date();
+today.setDate(today.getDate() + markOffset);
+today.setMonth(today.getMonth() + currentMonthOffset);
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+document.getElementById("calendarTitle").innerText = `${year}년 ${month + 1}월`;
+      const tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+
+      for (let i = 0; i < firstDay; i++) {
+        calendar.innerHTML += "<div></div>";
+      }
+
+      for (let d = 1; d <= lastDate; d++) {
+        const cell = document.createElement("div");
+        const date = new Date(year, month, d);
+        const dateStr = date.toISOString().split("T")[0];
+        let isMarked = false;
+
+        tasks.forEach(t => {
+          const start = new Date(t.start);
+          const end = t.end ? new Date(t.end) : null;
+          const isInRange = (!end && date >= start) || (end && date >= start && date <= end);
+          const isRightDay = t.days.includes(date.getDay());
+          if (isInRange && isRightDay) {
+            isMarked = true;
+          }
+        });
+
+        if (isMarked) {
+          cell.classList.add("highlight");
+        }
+
+        cell.textContent = d;
+        if (allowSticker) {
+          cell.onclick = () => {
+            cell.classList.toggle("sticker");
+          };
+        }
+        
+        if (date.getDay() === 0) cell.style.color = "red";  // 일요일 빨간색
+        const taskLabels = tasks.filter(t => {
+          const start = new Date(t.start);
+          const end = t.end ? new Date(t.end) : null;
+          const isInRange = (!end && date >= start) || (end && date >= start && date <= end);
+          const isRightDay = t.days.includes(date.getDay());
+          return isInRange && isRightDay;
+        }).map(t => `<div style='font-size:11px'>${t.name} ${t.goal}${t.unit}</div>`).join("");
+        if (taskLabels) cell.innerHTML += taskLabels;
+        calendar.appendChild(cell);
+        
+      }
+    }
+
+    function showRecords() {
+      let tasks = JSON.parse(localStorage.getItem(userKey) || "[]");
+      const container = document.getElementById("records");
+      container.innerHTML = "";
+      if (tasks.length === 0) {
+        container.innerHTML = "<p>기록이 없습니다.</p>";
+        return;
+      }
+      const ul = document.createElement("ul");
+      tasks.forEach(t => {
+        const li = document.createElement("li");
+        li.textContent = `${t.name}: 목표량 ${t.goal}${t.unit}, 시작일: ${t.start}, 종료일: ${t.end || "없음"}`;
+        ul.appendChild(li);
+      });
+      container.appendChild(ul);
+    }
+  </script>
+</body>
+</html>
+
+<script>
+  function showTodayTasks() {
+    const container = document.getElementById("markTaskList");
+    const title = document.getElementById("markDateTitle");
+    const today = new Date();
+today.setDate(today.getDate() + markOffset);
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const date = today.getDate();
+    const yyyyMMdd = today.toISOString().split("T")[0];
+    title.innerText = `${year}년 ${month}월 ${date}일 할일 목록`;
+
+    const tasks = JSON.parse(localStorage.getItem("SY_tasks") || "[]");
+    const todayTasks = tasks.filter(t => {
+      const start = new Date(t.start);
+      const end = t.end ? new Date(t.end) : null;
+      const isInRange = true; // 미래라도 미리 표시
+      const isRightDay = t.days.includes(today.getDay());
+      return isInRange && isRightDay;
+    });
+
+    const doneKey = "SY_done_" + yyyyMMdd;
+    let doneList = JSON.parse(localStorage.getItem(doneKey) || "{}");
+
+    container.innerHTML = "";
+    
+    
+    if (todayTasks.length === 0) {
+      const msg = document.createElement("p");
+      msg.textContent = "설정된 할 일이 없습니다.";
+      msg.style.color = "#999";
+      msg.style.fontStyle = "italic";
+      container.appendChild(msg);
+      return;
+    }
+    todayTasks.forEach(t => {
+        
+      const taskId = t.name + "_" + t.goal + "_" + t.unit;
+      const barContainer = document.createElement("div");
+      const label = document.createElement("div");
+      label.textContent = `${t.name} (${t.unit})`;
+      const bar = document.createElement("div");
+      bar.className = "progress-bar";
+      bar.dataset.taskId = taskId;
+      bar.style.display = "flex";
+      bar.style.border = "1px solid #ccc";
+      bar.style.height = "30px";
+      bar.style.cursor = "pointer";
+
+      for (let i = 1; i <= parseInt(t.goal); i++) {
+        const unit = document.createElement("div");
+        unit.style.flex = "1";
+        unit.style.borderRight = "1px solid #eee";
+        unit.style.backgroundColor = doneList[taskId] >= i ? "#81c784" : "#fff";
+        unit.dataset.index = i;
+        unit.onclick = () => {
+          doneList[taskId] = i;
+          localStorage.setItem(doneKey, JSON.stringify(doneList));
+          showTodayTasks(); // redraw
+        };
+        bar.appendChild(unit);
+      }
+
+      barContainer.appendChild(label);
+      barContainer.appendChild(bar);
+      container.appendChild(barContainer);
+    });
+        
+      const li = document.createElement("li");
+      const id = t.name + "_" + t.goal + "_" + t.unit;
+      const checked = doneList.includes(id) ? "checked" : "";
+      li.innerHTML = `
+        <label>
+          <input type="checkbox" value="${id}" onchange="toggleDone(this)" ${checked}>
+          ${t.name} ${t.goal}${t.unit}
+        </label>`;
+      container.appendChild(li);
+    });
+  }
+
+  function toggleDone(checkbox) {
+    const today = new Date().toISOString().split("T")[0];
+    const doneKey = "SY_done_" + today;
+    let doneList = JSON.parse(localStorage.getItem(doneKey) || "{}");
+    const value = checkbox.value;
+
+    if (checkbox.checked) {
+      if (!doneList.includes(value)) doneList.push(value);
+    } else {
+      doneList = doneList.filter(v => v !== value);
+    }
+    localStorage.setItem(doneKey, JSON.stringify(doneList));
+  }
+</script>
+
+<script>
+  let markOffset = 0;
+
+  function changeMarkDate(offset) {
+    markOffset += offset;
+    showTodayTasks();
+  }
+</script>
